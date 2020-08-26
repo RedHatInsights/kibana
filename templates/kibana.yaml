@@ -48,7 +48,7 @@ objects:
             - "-c"
             - |
               set -ex
-              curl -XPUT "$ELASTICSEARCH_HOSTS/_template/template_1" -H 'Content-Type: application/json' -d'{"template": "cwl-*","mappings": {"dynamic_templates": [{"host_tags": {"match_mapping_type": "string","path_match": "*host.tags.*","mapping": {"index": false}}}]}}'
+              curl -XPUT "$ELASTICSEARCH_HOSTS/_template/template_1" -H 'Content-Type: application/json' -d'{"template": "cwl-*","settings": {"index.mapping.total_fields.limit": 2000},"mappings": {"dynamic_templates": [{"host_tags": {"match_mapping_type": "string","path_match": "*host.tags.*","mapping": {"index": false}}}]}}'
         containers:
         - env:
           - name: SERVER_NAME
