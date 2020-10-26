@@ -108,8 +108,8 @@ objects:
               cpu: 50m
               memory: 100Mi
             requests:
-              cpu: 20m
-              memory: 50Mi
+              cpu: 50m
+              memory: 100Mi
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
           volumeMounts:
@@ -145,8 +145,8 @@ objects:
               cpu: 50m
               memory: 100Mi
             requests:
-              cpu: 20m
-              memory: 50Mi
+              cpu: 50m
+              memory: 100Mi
           image: quay.io/app-sre/nginx:alpine
           name: es-init-template
         restartPolicy: Always
