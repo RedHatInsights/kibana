@@ -75,7 +75,7 @@ objects:
               memory: 1900Mi
             requests:
               cpu: 200m
-              memory: 800Mi
+              memory: 950Mi
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
         - args:
