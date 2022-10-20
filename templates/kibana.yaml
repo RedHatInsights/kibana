@@ -7,6 +7,7 @@ objects:
   kind: ServiceAccount
   metadata:
     annotations:
+      kube-linter.io/ignore-all: "ignore the thing"
       serviceaccounts.openshift.io/oauth-redirectreference.primary: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"kibana"}}'
     name: kibana
 - apiVersion: apps/v1
