@@ -15,6 +15,8 @@ objects:
   metadata:
     labels: {}
     name: kibana
+    annotations:
+      kube-linter.io/ignore-all: "ignore the thing"
   spec:
     minReadySeconds: 15
     progressDeadlineSeconds: 600
