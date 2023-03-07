@@ -69,6 +69,18 @@ objects:
               secretKeyRef:
                 key: endpoint
                 name: kibana-elasticsearch
+          - name: USER
+            valueFrom:
+              secretKeyRef:
+                key: username
+                name: admin_user_credentials
+            required: false
+          - name: PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: password
+                name: admin_user_credentials
+            required: false
           image: ${IMAGE}:${IMAGE_TAG}
           imagePullPolicy: IfNotPresent
           name: kibana
