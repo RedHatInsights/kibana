@@ -13,7 +13,6 @@ objects:
 - apiVersion: apps/v1
   kind: Deployment
   metadata:
-    labels: {}
     name: kibana
     annotations:
       kube-linter.io/ignore-all: "ignore the thing"
@@ -194,7 +193,7 @@ objects:
     port:
       targetPort: 8443
     tls:
-      termination: Reencrypt
+      termination: reencrypt
     to:
       kind: Service
       name: kibana
