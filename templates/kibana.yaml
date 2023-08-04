@@ -74,13 +74,13 @@ objects:
               secretKeyRef:
                 key: username
                 name: admin_user_credentials
-            required: false
+                optional: true
           - name: PASSWORD
             valueFrom:
               secretKeyRef:
                 key: password
                 name: admin_user_credentials
-            required: false
+                optional: true
           image: ${IMAGE}:${IMAGE_TAG}
           imagePullPolicy: IfNotPresent
           name: kibana
@@ -222,6 +222,6 @@ parameters:
 - name: OAUTH_IMAGE
   value: quay.io/openshift/origin-oauth-proxy
 - name: OAUTH_IMAGE_TAG
-  value: 4.4.0
+  value: 4.14.0
 - name: KIBANA_HOST
   value: kibana.apps.crc-stg-01.o4v9.p1.openshiftapps.com
