@@ -261,7 +261,7 @@ parameters:
 - name: RESOLVER_VALID
   value: "30s"
 - name: IMAGE_PULL_SECRET_NAME
-  value: quay.io
+  value: quay-cloudservices-pull
 - name: CERT_MANAGER_ISSUER_KIND
   value: ClusterIssuer
 - name: CERT_MANAGER_ISSUER_NAME
