@@ -36,7 +36,6 @@ objects:
           server_name ${HOST};
           }
         }
-      }
 - apiVersion: apps/v1
   kind: Deployment
   metadata:
