@@ -34,8 +34,18 @@ objects:
         server {
           listen 8080;
           server_name ${HOST};
+          rewrite ^/$ https://${HOST}/_plugin/kibana redirect;
+          location /_plugin/kibana {
+              # Forward requests to Dashboards
+              proxy_pass ${ES_ENDPOINT};
+              # Response buffer settings
+              proxy_buffer_size 128k;
+              proxy_buffers 4 256k;
+              proxy_busy_buffers_size 256k;
+            }
           }
         }
+        
 - apiVersion: apps/v1
   kind: Deployment
   metadata:
