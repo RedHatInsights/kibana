@@ -22,7 +22,7 @@ objects:
       spec:
         containers:
         - name: kibana-proxy
-          image: ghcr.io/awslabs/aws-sigv4-proxy:latest
+          image: ghcr.io/awslabs/aws-sigv4-proxy
           args:
             - --name
             - kibana-elasticsearch
