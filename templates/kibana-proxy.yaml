@@ -4,193 +4,46 @@ kind: Template
 metadata:
   name: kibana-proxy
 objects:
-- apiVersion: v1
-  kind: ConfigMap
-  metadata:
-    name: kibana-proxy
-    annotations:
-      qontract.recycle: "true"
-  data:
-    nginx.conf.tpl: |-
-      worker_processes 1;
-      daemon off;
-      error_log /dev/stdout;
-      events {
-          worker_connections ${WORKER_CONNECTIONS};
-      }
-
-      http {
-        server_names_hash_bucket_size ${SERVER_NAMES_HASH_BUCKET_SIZE};
-        access_log /dev/stdout;
-        resolver __NAMESERVER__ valid=${RESOLVER_VALID};
-        server {
-          listen 8080 default_server;
-          location / {
-            access_log off;
-            default_type text/plain;
-            return 200 "healthy\n";
-          }
-        }
-        server {
-          listen 8080;
-          server_name ${HOST};
-          rewrite ^/$ https://${HOST}/_plugin/kibana redirect;
-          location /_plugin/kibana {
-              # Forward requests to Dashboards
-              proxy_pass ${ES_ENDPOINT};
-              # Response buffer settings
-              proxy_buffer_size 128k;
-              proxy_buffers 4 256k;
-              proxy_busy_buffers_size 256k;
-            }
-          }
-        }
-        
 - apiVersion: apps/v1
   kind: Deployment
   metadata:
-    labels:
-      run: kibana-proxy
     name: kibana-proxy
+    labels:
+      app: kibana-proxy
   spec:
-    replicas: ${{REPLICAS}}
+    replicas: 1
     selector:
       matchLabels:
-        run: kibana-proxy
+        app: kibana-proxy
     template:
       metadata:
         labels:
-          run: kibana-proxy
+          app: kibana-proxy
       spec:
-        affinity:
-          podAntiAffinity:
-            preferredDuringSchedulingIgnoredDuringExecution:
-            - podAffinityTerm:
-                labelSelector:
-                  matchExpressions:
-                  - key: run
-                    operator: In
-                    values:
-                    - kibana-proxy
-                topologyKey: topology.kubernetes.io/zone
-              weight: 50
-            - podAffinityTerm:
-                labelSelector:
-                  matchExpressions:
-                  - key: run
-                    operator: In
-                    values:
-                    - kibana-proxy
-                topologyKey: kubernetes.io/hostname
-              weight: 1
-        serviceAccountName: kibana-proxy
         containers:
-        - name: oauth-proxy
-          image: ${OAUTH_PROXY_IMAGE_NAME}:${OAUTH_PROXY_IMAGE_TAG}
-          imagePullPolicy: IfNotPresent
-          ports:
-          - containerPort: 3000
-            name: https
-            protocol: TCP
-          resources:
-            requests:
-              cpu: 20m
-              memory: 50Mi
-            limits:
-              cpu: 50m
-              memory: 100Mi
-          readinessProbe:
-            failureThreshold: 3
-            periodSeconds: 10
-            successThreshold: 1
-            httpGet:
-              path: /oauth/healthz
-              port: https
-              scheme: HTTPS
-            timeoutSeconds: 1
-            initialDelaySeconds: 10
-          livenessProbe:
-            failureThreshold: 3
-            periodSeconds: 10
-            successThreshold: 1
-            httpGet:
-              path: /oauth/healthz
-              port: https
-              scheme: HTTPS
-            timeoutSeconds: 1
-            initialDelaySeconds: 10
+        - name: kibana-proxy
+          image: ghcr.io/awslabs/aws-sigv4-proxy:latest
           args:
-          - --https-address=:3000
-          - --provider=openshift
-          - --openshift-service-account=kibana-proxy
-          - --upstream=http://localhost:8080
-          - --upstream-timeout=3600s
-          - --tls-cert=/etc/tls/private/tls.crt
-          - --tls-key=/etc/tls/private/tls.key
-          - --cookie-secret-file=/var/run/secrets/kubernetes.io/serviceaccount/token
-          volumeMounts:
-          - mountPath: /etc/tls/private
-            name: nginx-tls
-        - image: ${NGINX_IMAGE_NAME}:${NGINX_IMAGE_TAG}
-          command:
-          - /bin/sh
-          - -c
-          args:
-          - >
-            NAMESERVER=`grep nameserver /etc/resolv.conf | head -n 1 | cut -d " " -f 2` &&
-            sed -e "s/__NAMESERVER__/$NAMESERVER/" /etc/nginx/nginx.conf.tpl > /run/nginx.conf &&
-            nginx -c /run/nginx.conf
-          name: nginx-proxy
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 200m
-              memory: 256Mi
+            - --name
+            - kibana-elasticsearch
+            - --region
+            - us-east-1
+            - --endpoint
+            - https://vpc-kibana-elasticsearch-2v2ydb43phxfw2byfkv3kqem64.us-east-1.es.amazonaws.com/_plugin/kibana/
+          env:
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: proxy
+                key: AWS_ACCESS_KEY_ID
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: proxy
+                key: AWS_SECRET_ACCESS_KEY
           ports:
           - containerPort: 8080
-            name: http
-            protocol: TCP
-          readinessProbe:
-            failureThreshold: 3
-            periodSeconds: 10
-            successThreshold: 1
-            httpGet:
-              path: /
-              port: http
-              scheme: HTTP
-            timeoutSeconds: 1
-            initialDelaySeconds: 10
-          livenessProbe:
-            failureThreshold: 3
-            periodSeconds: 10
-            successThreshold: 1
-            httpGet:
-              path: /
-              port: http
-              scheme: HTTP
-            timeoutSeconds: 1
-            initialDelaySeconds: 10
-          volumeMounts:
-          - name: nginx-conf
-            mountPath: /etc/nginx/nginx.conf.tpl
-            subPath: nginx.conf.tpl
-          - name: nginx-cache
-            mountPath: /var/cache/nginx
-          - name: nginx-run
-            mountPath: /var/run
-        volumes:
-        - name: nginx-conf
-          configMap:
-            name: kibana-proxy
-        - name: nginx-cache
-          emptyDir: {}
-        - name: nginx-run
-          emptyDir: {}
-        - name: nginx-tls
-          secret:
-            secretName:  kibana-proxy-tls
+  
 - apiVersion: v1
   kind: Service
   metadata:
@@ -202,7 +55,7 @@ objects:
     - name: https
       port: 3000
       protocol: TCP
-      targetPort: https
+      targetPort: 8080
     selector:
       run: kibana-proxy
     sessionAffinity: ClientIP
@@ -241,22 +94,10 @@ parameters:
   value: dummy # needed because saasherder will fail if this parameter doesn't exist.
 - name: REPLICAS
   value: "1"
-- name: NGINX_IMAGE_NAME
-  value: quay.io/app-sre/nginx
-- name: NGINX_IMAGE_TAG
-  value: "1.17.9"
 - name: WORKER_CONNECTIONS
   value: "1024"
 - name: SERVER_NAMES_HASH_BUCKET_SIZE
   value: "128"
-- name: HOST
-  required: true
-- name: ES_ENDPOINT
-  required: true
-- name: OAUTH_PROXY_IMAGE_NAME
-  value: quay.io/openshift/origin-oauth-proxy
-- name: OAUTH_PROXY_IMAGE_TAG
-  value: "4.15.0"
 - name: RESOLVER_VALID
   value: "30s"
 - name: IMAGE_PULL_SECRET_NAME
@@ -265,3 +106,5 @@ parameters:
   value: ClusterIssuer
 - name: CERT_MANAGER_ISSUER_NAME
   value: letsencrypt-prod-http
+- name: HOST
+  required: true
