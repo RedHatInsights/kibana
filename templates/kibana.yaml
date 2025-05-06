@@ -205,7 +205,7 @@ parameters:
 - description: Image tag
   name: IMAGE_TAG
   required: true
-  value: 7.4.2
+  value: 7.9.3
 - name: OAUTH_IMAGE
   value: quay.io/openshift/origin-oauth-proxy
 - name: OAUTH_IMAGE_TAG
