@@ -149,7 +149,7 @@ objects:
             requests:
               cpu: 50m
               memory: 100Mi
-          image: quay.io/app-sre/ubi8-ubi-minimal:latest
+          image: registry.access.redhat.com/ubi8/ubi-minimal:latest
           name: es-init-template
         restartPolicy: Always
         schedulerName: default-scheduler
