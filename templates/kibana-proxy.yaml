@@ -244,9 +244,9 @@ parameters:
 - name: REPLICAS
   value: "1"
 - name: NGINX_IMAGE_NAME
-  value: quay.io/app-sre/nginx
+  value: registry.access.redhat.com/ubi8/nginx-124
 - name: NGINX_IMAGE_TAG
-  value: "1.28.0"
+  value: "1-1752581739"
 - name: WORKER_CONNECTIONS
   value: "1024"
 - name: SERVER_NAMES_HASH_BUCKET_SIZE
