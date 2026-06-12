@@ -201,11 +201,11 @@ objects:
 parameters:
 - description: Image namespace
   name: IMAGE
-  value: quay.io/cloudservices/kibana-oss
+  value: docker.elastic.co/kibana/kibana
 - description: Image tag
   name: IMAGE_TAG
   required: true
-  value: 7.9.3
+  value: 7.10.2
 - name: OAUTH_IMAGE
   value: quay.io/openshift/origin-oauth-proxy
 - name: OAUTH_IMAGE_TAG
