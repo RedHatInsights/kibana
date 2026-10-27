@@ -1,0 +1,266 @@
+# Vendored from openshift-assisted/opensearch-infra (openshift/template.yaml)
+# with the haproxy endpoint and OAuth cookie secret names parameterized.
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: opensearch-dashboards
+objects:
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: prometheus-opensearch-exporter
+    labels:
+      app: prometheus-opensearch-exporter
+  spec:
+    type: ClusterIP
+    ports:
+      - name: http
+        port: 9108
+        protocol: TCP
+    selector:
+      app: prometheus-opensearch-exporter
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: prometheus-opensearch-exporter
+    labels:
+      app: prometheus-opensearch-exporter
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: prometheus-opensearch-exporter
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+      type: RollingUpdate
+    template:
+      metadata:
+        labels:
+          app: prometheus-opensearch-exporter
+      spec:
+        restartPolicy: Always
+        containers:
+          - name: exporter
+            env:
+              - name: ES_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: ${ES_PASSWORD_SECRET_NAME}
+                    key: ${ES_PASSWORD_SECRET_KEY}
+              - name: ES_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: ${ES_USERNAME_SECRET_NAME}
+                    key: ${ES_USERNAME_SECRET_KEY}
+              - name: OPENSEARCH_URI
+                valueFrom:
+                  secretKeyRef:
+                    name: ${ES_URI_SECRET_NAME}
+                    key: ${ES_URI_SECRET_KEY}
+            image: ${IMAGE_NAME}
+            imagePullPolicy: ${IMAGE_PULL_POLICY}
+            command: ["elasticsearch_exporter",
+                      "--log.format=logfmt",
+                      "--log.level=info",
+                      "--es.uri=$(OPENSEARCH_URI)",
+                      "--es.all",
+                      "--es.indices",
+                      "--es.indices_settings",
+                      "--es.indices_mappings",
+                      "--es.shards",
+                      "--es.timeout=30s",
+                      "--collector.snapshots",
+                      "--web.listen-address=:9108",
+                      "--web.telemetry-path=/metrics"]
+            resources:
+              limits:
+                cpu: ${CPU_LIMIT}
+                memory: ${MEMORY_LIMIT}
+              requests:
+                cpu: ${CPU_REQUEST}
+                memory: ${MEMORY_REQUEST}
+            ports:
+              - containerPort: 9108
+                name: http
+            livenessProbe:
+              httpGet:
+                path: /healthz
+                port: http
+              initialDelaySeconds: 5
+              timeoutSeconds: 5
+              periodSeconds: 5
+            readinessProbe:
+              httpGet:
+                path: /healthz
+                port: http
+              initialDelaySeconds: 1
+              timeoutSeconds: 5
+              periodSeconds: 5
+            lifecycle:
+              preStop:
+                exec:
+                  command: ["/bin/ash", "-c", "sleep 20"]
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: kibana-proxy
+    name: kibana-proxy
+  spec:
+    ports:
+    - port: 3000
+      protocol: TCP
+      targetPort: 3000
+    selector:
+      app: kibana
+    sessionAffinity: None
+    type: ClusterIP
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: kibana
+    labels:
+      app: kibana
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: kibana
+    template:
+      metadata:
+        labels:
+          app: kibana
+      spec:
+        serviceAccountName: kibana-proxy
+        containers:
+        - name: kibana-proxy
+          image: ${OAUTH_IMAGE}:${OAUTH_IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 3000
+            name: http
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /oauth/healthz
+              port: http
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          resources:
+            limits:
+              cpu: 50m
+              memory: 100Mi
+            requests:
+              cpu: 50m
+              memory: 100Mi
+          args:
+          - --http-address=0.0.0.0:3000
+          - --provider=openshift
+          - --openshift-service-account=kibana-proxy
+          - --upstream=http://localhost:8181
+          - --https-address=
+          - --pass-basic-auth=false
+          - --openshift-sar={"namespace":"$(NAMESPACE)","resource":"services","name":"kibana-proxy","verb":"get"}
+          - '--openshift-delegate-urls={"/": {"namespace":"$(NAMESPACE)","resource":"services","name":"kibana-proxy","verb":"get"}}'
+          - --client-secret-file=/var/run/secrets/kubernetes.io/serviceaccount/token
+          env:
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: OAUTH2_PROXY_COOKIE_SECRET
+            valueFrom:
+              secretKeyRef:
+                key: session_secret
+                name: ${OAUTH_COOKIE_SECRET_NAME}
+        - image: ${HAPROXY_IMAGE}:${HAPROXY_IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          name: haproxy
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              host="${ENDPOINT#https://}"
+              host="${host#http://}"
+              host="${host%%/*}"
+              host="${host%%:*}"
+
+              cat << EOF > /tmp/haproxy.cfg
+              frontend http_in
+                  bind *:8181
+                  mode http
+
+                  http-request del-header Authorization
+                  http-request set-header Authorization %[hdr(X-OpenSearch-Auth)] if { hdr(X-OpenSearch-Auth) -m found }
+                  http-request del-header X-OpenSearch-Auth
+
+                  default_backend opensearch_aws
+
+              backend opensearch_aws
+                  mode http
+                  server aws_os ${host}:443 ssl sni str(${host}) verify required ca-file /etc/ssl/certs/ca-bundle.crt verifyhost ${host}
+              EOF
+
+              haproxy -f /tmp/haproxy.cfg
+          env:
+          - name: ENDPOINT
+            valueFrom:
+              secretKeyRef:
+                key: endpoint
+                name: ${ES_ENDPOINT_SECRET_NAME}
+          ports:
+          - containerPort: 8181
+            name: hahttp
+            protocol: TCP
+          resources:
+            limits:
+              cpu: 50m
+              memory: 100Mi
+            requests:
+              cpu: 50m
+              memory: 100Mi
+parameters:
+- name: MEMORY_LIMIT
+  value: "256Mi"
+  required: false
+- name: CPU_LIMIT
+  value: "1"
+  required: false
+- name: MEMORY_REQUEST
+  value: "32Mi"
+  required: false
+- name: CPU_REQUEST
+  value: "5m"
+  required: false
+- name: ES_USERNAME_SECRET_NAME
+  value: opensearch-admin-credentials
+- name: ES_USERNAME_SECRET_KEY
+  value: master_user_name
+- name: ES_PASSWORD_SECRET_NAME
+  value: opensearch-admin-credentials
+- name: ES_PASSWORD_SECRET_KEY
+  value: master_user_password
+- name: ES_URI_SECRET_NAME
+  value: kibana-elasticsearch
+- name: ES_URI_SECRET_KEY
+  value: endpoint
+- name: ES_ENDPOINT_SECRET_NAME
+  value: kibana-elasticsearch
+- name: OAUTH_COOKIE_SECRET_NAME
+  value: kibana-cookie
+- name: IMAGE_NAME
+  value: "quay.io/prometheuscommunity/elasticsearch-exporter:v1.8.0"
+- name: IMAGE_PULL_POLICY
+  value: "IfNotPresent"
+- name: OAUTH_IMAGE
+  value: quay.io/openshift/origin-oauth-proxy
+- name: OAUTH_IMAGE_TAG
+  value: 4.18.0
+- name: HAPROXY_IMAGE
+  value: registry.redhat.io/rhui5/haproxy-rhel9
+- name: HAPROXY_IMAGE_TAG
+  value: 5.1-1779798128
